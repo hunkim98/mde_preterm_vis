@@ -75,3 +75,54 @@ def get_raw_github_data(full_name, filename, accesstoken):
         return response.json()
     else:
         return None
+
+
+def get_github_activites(fullname, accesstoken, period="", activity_type="push"):
+    all_data = []
+    has_next = True
+
+    # initial call of the data
+    response = requests.get(
+        "https://api.github.com/repos/"
+        + fullname
+        + "/activity"
+        + "?time_period="
+        + period
+        + "&activity_type="
+        + activity_type,
+        headers={"Authorization": f"token {accesstoken}"},
+    )
+
+    next_link = None
+
+    if response.status_code == 200:
+        all_data += response.json()
+
+        link = response.headers.get("Link", None)
+
+        if link is not None and "next" in link:
+            next_link = response.headers["Link"].split(";")[0][1:-1]
+
+    while next_link is not None:
+        data, next_link = recursive_call_with_link(next_link, accesstoken)
+        all_data += data
+
+    # reverse the data
+    all_data.reverse()
+    return all_data
+
+
+def recursive_call_with_link(url, accesstoken):
+    response = requests.get(
+        url,
+        headers={"Authorization": f"token {accesstoken}"},
+    )
+
+    if response.status_code == 200:
+        if "next" in response.headers["Link"]:
+            next_link = response.headers["Link"].split(";")[0][1:-1]
+            return response.json(), next_link
+        else:
+            return response.json(), None
+    else:
+        return None
