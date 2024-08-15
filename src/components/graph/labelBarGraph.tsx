@@ -219,12 +219,11 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
       .style("opacity", 0)
       .style("transition", "opacity 0.3s ease");
 
-    const staticBehindGroupRect = (staticBehindGroupRectRef.current =
-      staticBehindGroup
-        .append("rect")
-        .attr("fill", "none")
-        .attr("width", behindGroupRectWidth)
-        .attr("height", svgHeight))
+    (staticBehindGroupRectRef.current = staticBehindGroup
+      .append("rect")
+      .attr("fill", "none")
+      .attr("width", behindGroupRectWidth)
+      .attr("height", svgHeight))
       .attr("fill", "rgba(0,0,0,0.1)")
       .style("opacity", 0)
       .style("transition", "opacity 0.3s ease");
