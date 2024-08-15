@@ -1,7 +1,10 @@
 import { createContext, useContext, useState } from "react";
 import { LabelColor } from "../constants/color";
 
-interface RepositoryContextProps {}
+interface RepositoryContextProps {
+  selectedLabel: LabelColor | null;
+  setSelectedLabel: (label: string | null) => void;
+}
 
 const RepositoryContext = createContext<RepositoryContextProps>(
   {} as RepositoryContextProps
@@ -12,12 +15,15 @@ function RepositoryContextProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [clickedLabel, setClickedLabel] = useState<LabelColor | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<LabelColor | null>(null);
+  const setLabel = (label: string | null) => {
+    setSelectedLabel(label as LabelColor);
+  };
   return (
     <RepositoryContext.Provider
       value={{
-        clickedLabel,
-        setClickedLabel,
+        selectedLabel,
+        setSelectedLabel: setLabel,
       }}
     >
       {children}
@@ -28,5 +34,5 @@ function RepositoryContextProvider({
 export { RepositoryContext, RepositoryContextProvider };
 
 export const useRepositoryContext = () => {
-  useContext(RepositoryContext);
+  return useContext(RepositoryContext);
 };

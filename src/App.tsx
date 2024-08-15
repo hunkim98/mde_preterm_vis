@@ -3,11 +3,21 @@ import logo from "./logo.svg";
 import "./App.css";
 import { LabelData } from "./data/labels";
 import { ActivityData } from "./data/activity";
-import { Box, Fieldset, Flex, SimpleGrid, Title } from "@mantine/core";
+import {
+  Box,
+  Button,
+  Fieldset,
+  Flex,
+  ScrollArea,
+  SimpleGrid,
+  Title,
+} from "@mantine/core";
 import LabelBarGraph from "./components/graph/labelBarGraph";
 import ChartResizer from "./components/graph/ChartResizer";
 import "@mantine/core/styles.css";
 import TimeGraph from "./components/graph/TimeGraph";
+import { RepositoryList } from "./components/repository/repositoryList";
+import { useRepositoryContext } from "./context/repositoryContext";
 
 function App() {
   const groupedLabelCount = useMemo(() => {
@@ -31,7 +41,52 @@ function App() {
     return LabelData.find((item) => item.full_name === name)?.labels;
   }, []);
 
+  const { selectedLabel, setSelectedLabel } = useRepositoryContext();
+
   const groupedActivityData = useMemo(() => {
+    const labels = Array.from(groupedLabelCount.map((item) => item[0]));
+    const aggregatedData: Array<{
+      date: string;
+      [key: string]: number | string;
+    }> = [];
+    ActivityData.forEach((item) => {
+      const date = item.date;
+      const monthlyLabels = new Map<string, number>();
+      Object.entries(item).forEach(([key, value]) => {
+        if (key === "date") {
+          return;
+        }
+        const labelsOfRepo = getLabelsOfFullName(key);
+        if (!labelsOfRepo) {
+          return;
+        }
+        labelsOfRepo.forEach((label) => {
+          if (selectedLabel) {
+            if (label !== selectedLabel) {
+              return;
+            }
+          }
+          if (labels.includes(label)) {
+            if (monthlyLabels.has(label)) {
+              monthlyLabels.set(
+                label,
+                monthlyLabels.get(label)! + parseInt(value as string)
+              );
+            } else {
+              monthlyLabels.set(label, parseInt(value as string));
+            }
+          }
+        });
+      });
+      aggregatedData.push({
+        date,
+        ...Object.fromEntries(monthlyLabels),
+      });
+    });
+    return aggregatedData;
+  }, [groupedLabelCount, getLabelsOfFullName, selectedLabel]);
+
+  const originalGroupedActivityData = useMemo(() => {
     const labels = Array.from(groupedLabelCount.map((item) => item[0]));
     const aggregatedData: Array<{
       date: string;
@@ -72,7 +127,20 @@ function App() {
   return (
     <div className="App">
       <Flex direction={"column"} py={"lg"} gap={20}>
-        <Title order={3}>Hun Kim Coding Projects</Title>
+        <Flex align={"center"} gap={20}>
+          <Title order={3}>Hun Kim Personal Coding Projects</Title>
+          {selectedLabel && (
+            <Button
+              size="xs"
+              variant={"outline"}
+              onClick={() => {
+                setSelectedLabel(null);
+              }}
+            >
+              Clear Filter
+            </Button>
+          )}
+        </Flex>
         <SimpleGrid cols={2}>
           {/* <ChartResizer width={"100%"}> */}
           <Flex direction={"column"}>
@@ -81,7 +149,7 @@ function App() {
                 <LabelBarGraph
                   data={groupedLabelCount}
                   width={800}
-                  height={400}
+                  height={450}
                   margin={{
                     top: 20,
                     right: 20,
@@ -92,8 +160,24 @@ function App() {
               </ChartResizer>
             </Box>
           </Flex>
-          <Fieldset>
-            <Flex></Flex>
+          <Fieldset legend="Filtered Projects">
+            <ScrollArea
+              h={400}
+              onScroll={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              <RepositoryList
+                data={
+                  selectedLabel
+                    ? LabelData.filter((item) =>
+                        item.labels.includes(selectedLabel)
+                      )
+                    : []
+                }
+              />
+            </ScrollArea>
           </Fieldset>
         </SimpleGrid>
         <Flex direction={"column"}>
@@ -118,7 +202,7 @@ function App() {
                   ) as string[]
                 }
                 maxYValue={Math.max(
-                  ...groupedActivityData.map((item) => {
+                  ...originalGroupedActivityData.map((item) => {
                     let total = 0;
                     Object.values(item).forEach((key) => {
                       if (key.toString().includes("-")) {

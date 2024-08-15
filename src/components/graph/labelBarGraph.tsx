@@ -8,6 +8,7 @@ import React, {
 import * as d3 from "d3";
 import { ILabelItem } from "../../data/labels";
 import { LabelColorer } from "../../constants/color";
+import { useRepositoryContext } from "../../context/repositoryContext";
 
 interface LabelBarGraphInterface {
   data: Array<[string, number]>;
@@ -43,8 +44,16 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
     useRef<d3.Selection<SVGGElement, unknown, HTMLElement, any>>();
   const behindGroupRef =
     useRef<d3.Selection<SVGGElement, unknown, HTMLElement, any>>();
+  const staticBehindGroupRef =
+    useRef<d3.Selection<SVGGElement, unknown, HTMLElement, any>>();
   const behindGroupRectRef =
     useRef<d3.Selection<SVGRectElement, unknown, HTMLElement, any>>();
+  const staticBehindGroupRectRef =
+    useRef<d3.Selection<SVGRectElement, unknown, HTMLElement, any>>();
+
+  const isRendered = useRef(false);
+
+  const { setSelectedLabel, selectedLabel } = useRepositoryContext();
 
   const [tooltip, setTooltip] = useState({
     opacity: 0,
@@ -134,6 +143,14 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
           .append("g")
           .attr("class", "behindGroup"));
 
+    const staticBehindGroup = staticBehindGroupRef.current
+      ? staticBehindGroupRef.current
+      : (staticBehindGroupRef.current = svg
+          .append("g")
+          .attr("clip-path", `url(#clip-area-${BAR_GRAPH_ID})`)
+          .append("g")
+          .attr("class", "static-behindGroup"));
+
     xAxisGroup
       .attr("transform", `translate(0,${svgHeight})`)
       .style("opacity", 0.5)
@@ -160,7 +177,13 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
       })
       // start from bottom
       .transition()
-      .duration(1000)
+      .duration(() => {
+        if (!isRendered.current) {
+          return 0;
+        } else {
+          return 500;
+        }
+      })
       .attr("y", (d) => {
         return yScale(d[1]) as number;
       })
@@ -196,10 +219,25 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
       .style("opacity", 0)
       .style("transition", "opacity 0.3s ease");
 
-    behindGroup.selectAll("rect").attr("opacity", 0);
+    const staticBehindGroupRect = (staticBehindGroupRectRef.current =
+      staticBehindGroup
+        .append("rect")
+        .attr("fill", "none")
+        .attr("width", behindGroupRectWidth)
+        .attr("height", svgHeight))
+      .attr("fill", "rgba(0,0,0,0.1)")
+      .style("opacity", 0)
+      .style("transition", "opacity 0.3s ease");
+
+    staticBehindGroup.selectAll("rect").attr("opacity", 0);
+
+    behindGroup.selectAll("rect").style("opacity", 0);
 
     svgContainer
       .on("mouseover", function (event) {
+        if (selectedLabel) {
+          return;
+        }
         const coords = d3.pointer(event);
         const x = coords[0] - fixedMargin.left;
         const y = coords[1];
@@ -228,32 +266,20 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
           }));
         }
       })
-      // .on("mousemove", function (event) {
-      //   const coords = d3.pointer(event);
-      //   const x = coords[0] - fixedMargin.left;
-      //   const y = coords[1];
-      //   const eachBand = xScale.step();
-      //   const index = Math.floor(x / eachBand);
-      //   let absoluteX = x;
-      //   let absoluteY = y;
-
-      //   if (index >= 0 && index < data.length) {
-      //     setTooltip((prev) => ({
-      //       ...prev,
-      //       opacity: 0,
-      //     }));
-      //   } else {
-      //     setTooltip((prev) => ({
-      //       ...prev,
-      //       opacity: 0,
-      //     }));
-      //     setStackBarTooltip((prev) => ({
-      //       ...prev,
-      //       opacity: 0,
-      //     }));
-      //   }
-      //   // we need the x string value
-      // })
+      .on("mousedown", function (event) {
+        const coords = d3.pointer(event);
+        const x = coords[0] - fixedMargin.left;
+        const y = coords[1];
+        let absoluteX = x;
+        let absoluteY = y;
+        const eachBand = xScale.step();
+        const index = Math.floor(x / eachBand);
+        if (index >= 0 && index < data.length) {
+          setSelectedLabel(data[index][0]);
+        } else {
+          setSelectedLabel(null);
+        }
+      })
       .on("mouseleave", function () {
         behindGroupRect.style("opacity", 0);
         setTooltip((prev) => ({
@@ -261,7 +287,29 @@ const LabelBarGraph: React.FC<LabelBarGraphInterface> = ({
           opacity: 0,
         }));
       });
-  }, [data, width, height, margin]);
+  }, [data, width, height, margin, selectedLabel]);
+
+  useEffect(() => {
+    const staticBehindRect = staticBehindGroupRectRef.current;
+    staticBehindGroupRef.current?.selectAll("rect").style("opacity", 0);
+    if (selectedLabel) {
+      // highlight the selected label
+      const xScale = xRef.current;
+      const yScale = yRef.current;
+      if (!staticBehindRect || !xScale || !yScale) return;
+      const x = xScale(selectedLabel);
+      if (!x) return;
+      console.log("x ", x);
+      staticBehindRect
+        .attr("x", x - (xScale.paddingInner() * xScale.step()) / 2)
+        .attr("y", 0);
+      staticBehindRect.style("opacity", 1);
+    } else {
+      if (!staticBehindRect) return;
+      staticBehindRect.style("opacity", 0);
+    }
+    console.log("selectedlabel", selectedLabel);
+  }, [selectedLabel]);
 
   useEffect(() => {
     renderGraph();
