@@ -1,6 +1,10 @@
 from transformers import pipeline
 
 from transformers import DebertaTokenizer, DebertaModel, AutoTokenizer, AutoModel
+import json
+import pandas as pd
+
+THRESHOLD = 0.3
 
 
 def main():
@@ -9,18 +13,15 @@ def main():
         "zero-shot-classification", model="Azma-AI/deberta-base-multi-label-classifier"
     )
 
-    text = "lge-log-analysis"
-
     candidate_labels = [
-        "web editor",
-        "algorithms",
-        "Artificial Intelligence",
-        "visualization",
-        "academics",
-        "framework",
+        "editor",
+        "web development",
+        "artificial intelligence",
+        "data visualization",
+        "mathematics",
+        "art",
+        "blockchain",
     ]
-
-    labels = classifier(text, candidate_labels)
 
     tokenizer = AutoTokenizer.from_pretrained(
         "Azma-AI/deberta-base-multi-label-classifier"
@@ -30,23 +31,64 @@ def main():
 
     model = AutoModel.from_pretrained("Azma-AI/deberta-base-multi-label-classifier")
 
-    inputs = tokenizer(text, return_tensors="pt")
+    df = pd.read_csv("github.csv")
 
-    outputs = model(**inputs)
+    temp_json = {}
 
-    sentence_embedding = outputs.last_hidden_state.mean(dim=1)
+    for i in range(0, df.shape[0]):
+        item = df.iloc[i]
+        name = item["name"]
+        full_name = item["full_name"]
+        description = item.get("description", "")
+        language = item["language"]
+        stars = item["stars"]
+        url = item["html_url"]
 
-    # Step 6: Convert to numpy (optional)
-    sentence_embedding = sentence_embedding.detach().numpy()
+        # check if the description is nan
+        if type(description) is float:
+            description = ""
+            continue
 
-    # Print the sentence embedding
-    print(sentence_embedding.shape)
+        text = name + " : " + description
 
-    best_label = labels["labels"][0]
+        labels = classifier(text, candidate_labels)
 
-    second_label = labels["labels"][1]
+        inputs = tokenizer(text, return_tensors="pt")
 
-    print(best_label)
+        outputs = model(**inputs)
+
+        sentence_embedding = outputs.last_hidden_state.mean(dim=1)
+
+        # Step 6: Convert to numpy (optional)
+        sentence_embedding = sentence_embedding.detach().numpy()
+
+        # Print the sentence embedding
+
+        best_label = labels["labels"][0]
+
+        labels_above_threshold = [
+            labels["labels"][i]
+            for i in range(len(labels["labels"]))
+            if labels["scores"][i] > THRESHOLD
+        ]
+
+        if len(labels_above_threshold) == 0:
+            labels_above_threshold = []
+
+        print(labels_above_threshold)
+
+        temp_json[full_name] = {
+            "full_name": full_name,
+            "name": name,
+            "description": description,
+            "stars": str(stars),
+            "language": language,
+            "labels": labels_above_threshold,
+            "url": url,
+            # "embedding": sentence_embedding.tolist(),
+        }
+
+    json.dump(temp_json, open("labels.json", "w"))
 
 
 main()
